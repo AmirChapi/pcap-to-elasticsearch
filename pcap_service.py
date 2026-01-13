@@ -43,3 +43,9 @@ elastic_write_counter = Counter(
     ["status"]
 )
 
+ELASTIC_URL = os.environ.get("ELASTIC_URL", "http://127.0.0.1:9200")
+ELASTIC_INDEX = os.environ.get("ELASTIC_INDEX", "pcap-packets")
+
+ELASTIC_USER = os.environ.get("ELASTIC_USER")        
+ELASTIC_PASSWORD = os.environ.get("ELASTIC_PASSWORD")  
+
