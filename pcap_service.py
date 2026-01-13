@@ -2,6 +2,8 @@ from pathlib import Path
 import argparse
 import os
 from prometheus_client import Counter, start_http_server
+from elasticsearch import Elasticsearch
+
 
 DEFAULT_PCAP = Path(__file__).parent / "data" / "caputure.pcapng"
 
@@ -51,3 +53,22 @@ ELASTIC_PASSWORD = os.environ.get("ELASTIC_PASSWORD")
 
 ELASTIC_RETRIES = int(os.environ.get("ELASTIC_RETRIES", "3"))
 ELASTIC_RETRY_SLEEP = float(os.environ.get("ELASTIC_RETRY_SLEEP", "0.2"))
+
+if ELASTIC_USER and ELASTIC_PASSWORD:
+    es = Elasticsearch(
+        ELASTIC_URL,
+        basic_auth=(ELASTIC_USER, ELASTIC_PASSWORD),
+        request_timeout=10
+    )
+else:
+    es = Elasticsearch(
+        ELASTIC_URL,
+        request_timeout=10
+    )
+
+try:
+    info = es.info()
+    print("Elasticsearch connected:", info["version"]["number"], "index:", ELASTIC_INDEX)
+except Exception as e:
+    print("ERROR: Could not connect to Elasticsearch:", e)
+    raise SystemExit(1)
