@@ -49,3 +49,5 @@ ELASTIC_INDEX = os.environ.get("ELASTIC_INDEX", "pcap-packets")
 ELASTIC_USER = os.environ.get("ELASTIC_USER")        
 ELASTIC_PASSWORD = os.environ.get("ELASTIC_PASSWORD")  
 
+ELASTIC_RETRIES = int(os.environ.get("ELASTIC_RETRIES", "3"))
+ELASTIC_RETRY_SLEEP = float(os.environ.get("ELASTIC_RETRY_SLEEP", "0.2"))
