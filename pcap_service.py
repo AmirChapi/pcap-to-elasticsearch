@@ -1,10 +1,14 @@
-from pathlib import Path
+import time
 import argparse
 import os
+
 from prometheus_client import Counter, start_http_server
 from elasticsearch import Elasticsearch
 from scapy.layers.inet import IP, TCP, UDP, ICMP
 from scapy.layers.inet6 import IPv6
+from scapy.utils import PcapNgReader
+from pathlib import Path
+
 
 
 
@@ -118,6 +122,55 @@ def extract_fields(pkt):
             data["dst_port"] = pkt[UDP].dport
 
     return data
+
+# ---- Read PCAP + metrics + write to Elasticsearch ----
+packets_total = {"tcp": 0, "udp": 0, "icmp": 0, "other": 0}
+bytes_total = {"tcp": 0, "udp": 0, "icmp": 0, "other": 0}
+
+count = 0
+fail_prints = 0
+
+with PcapNgReader(pcap_path) as reader:
+    for pkt in reader:
+        count += 1
+
+        data = extract_fields(pkt)
+        proto = data["l4_protocol"]
+
+        # Local summary counters
+        packets_total[proto] += 1
+        bytes_total[proto] += data["packet_length"]
+
+        # Prometheus counters
+        packets_counter.labels(protocol=proto).inc(1)
+        bytes_counter.labels(protocol=proto).inc(data["packet_length"])
+
+        if count <= 5:
+            print(f"\nPacket #{count}")
+            print(data)
+
+        written = False
+
+        for attempt in range(1, ELASTIC_RETRIES + 1):
+            try:
+                es.index(index=ELASTIC_INDEX, document=data)
+                elastic_write_counter.labels(status="success").inc(1)
+                written = True
+                break
+            except Exception as e:
+                if attempt < ELASTIC_RETRIES:
+                    print(
+                        f"WARN: ES write failed (attempt {attempt}/{ELASTIC_RETRIES}) -> retrying. Error: {e}"
+                    )
+                    time.sleep(ELASTIC_RETRY_SLEEP)
+                else:
+                    elastic_write_counter.labels(status="fail").inc(1)
+                    if fail_prints < 5:
+                        print(
+                            f"ERROR: ES write failed after {ELASTIC_RETRIES} attempts. Error: {e}"
+                        )
+                        fail_prints += 1
+
 
 
 
