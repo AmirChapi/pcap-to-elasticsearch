@@ -3,6 +3,9 @@ import argparse
 import os
 from prometheus_client import Counter, start_http_server
 from elasticsearch import Elasticsearch
+from scapy.layers.inet import IP, TCP, UDP, ICMP
+from scapy.layers.inet6 import IPv6
+
 
 
 DEFAULT_PCAP = Path(__file__).parent / "data" / "caputure.pcapng"
@@ -72,3 +75,49 @@ try:
 except Exception as e:
     print("ERROR: Could not connect to Elasticsearch:", e)
     raise SystemExit(1)
+
+def extract_fields(pkt):
+    data = {
+        "timestamp": float(getattr(pkt, "time", 0.0)),
+        "packet_length": len(pkt),
+        "src_ip": None,
+        "dst_ip": None,
+        "src_port": None,
+        "dst_port": None,
+        "l4_protocol": "other",
+    }
+
+    # IPv4
+    if IP in pkt:
+        data["src_ip"] = pkt[IP].src
+        data["dst_ip"] = pkt[IP].dst
+
+        if TCP in pkt:
+            data["l4_protocol"] = "tcp"
+            data["src_port"] = pkt[TCP].sport
+            data["dst_port"] = pkt[TCP].dport
+        elif UDP in pkt:
+            data["l4_protocol"] = "udp"
+            data["src_port"] = pkt[UDP].sport
+            data["dst_port"] = pkt[UDP].dport
+        elif ICMP in pkt:
+            data["l4_protocol"] = "icmp"
+
+    # IPv6
+    elif IPv6 in pkt:
+        data["src_ip"] = pkt[IPv6].src
+        data["dst_ip"] = pkt[IPv6].dst
+
+        if TCP in pkt:
+            data["l4_protocol"] = "tcp"
+            data["src_port"] = pkt[TCP].sport
+            data["dst_port"] = pkt[TCP].dport
+        elif UDP in pkt:
+            data["l4_protocol"] = "udp"
+            data["src_port"] = pkt[UDP].sport
+            data["dst_port"] = pkt[UDP].dport
+
+    return data
+
+
+
