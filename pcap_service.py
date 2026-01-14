@@ -171,6 +171,20 @@ with PcapNgReader(pcap_path) as reader:
                         )
                         fail_prints += 1
 
+print("\nTotal packets read:", count)
+print("\nPackets total by protocol:", packets_total)
+print("Bytes total by protocol:", bytes_total)
+print("\nFinished reading PCAP and writing to Elasticsearch.")
+
+print("\nOpen: http://localhost:%d/metrics" % METRICS_PORT)
+print("Service is running. Press Ctrl+C to stop.")
+
+try:
+    while True:
+        time.sleep(5)
+except KeyboardInterrupt:
+    print("\nStopping service... bye!")
+
 
 
 
