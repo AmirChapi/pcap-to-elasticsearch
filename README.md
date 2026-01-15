@@ -4,64 +4,52 @@ A small Python service that reads a PCAP/PCAPNG file, extracts basic packet fiel
 
 ---
 
-
-
 ## Project Structure
 
-- `pcap_service.py` - main service
-- `data/caputure.pcapng` - example PCAPNG file used by default
-## Example PCAP File
-
-Download a sample PCAP/PCAPNG from https://apackets.com/pcaps and place it here:
-- `data/caputure.pcapng`
-
-Then run:
-```powershell
-py .\pcap_service.py --pcap ".\data\caputure.pcapng"
-
+- `pcap_service.py` - main service (reads PCAP, writes to Elasticsearch, exposes metrics)
+- `docker-compose.yml` - runs Elasticsearch + the service
+- `Dockerfile` - builds the Python service image
+- `requirements.txt` - Python dependencies
+- `data/caputure.pcapng` - example PCAPNG file (optional)
 
 ---
 
-## How to Run
+## Example PCAP File
 
-### 1) Prerequisites
-- Python 3.10+ (tested also with Python 3.13)
-- Docker Desktop (to run Elasticsearch)
+You can download sample PCAP/PCAPNG files from:
+- https://apackets.com/pcaps
 
-### 2) Install Python Dependencies
-From the project directory:
+Place a file here (default path used by the service):
+- `data/caputure.pcapng`
 
-```bash
-py -m pip install scapy prometheus-client "elasticsearch>=8,<9"
+---
 
+## Docker Compose `.env` (recommended)
 
+Docker Compose automatically loads a `.env` file from the same directory as `docker-compose.yml`.
 
-Start Elasticsearch (Docker)
+Create a file named `.env`  and set:
 
-docker run -d --name es01 -p 9200:9200 -p 9300:9300 `
-  -e "discovery.type=single-node" `
-  -e "xpack.security.enabled=true" `
-  -e "xpack.security.http.ssl.enabled=false" `
-  -e "ELASTIC_PASSWORD=MyStrongPass123!" `
-  -e "ES_JAVA_OPTS=-Xms1g -Xmx1g" `
-  docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+```env
+ELASTIC_PASSWORD=YourStrongPasswordHere
 
-#test
-curl.exe -u elastic:MyStrongPass123! http://localhost:9200
+How to Run (Recommended: Docker Compose)
+1) Prerequisites
 
-Environment Variables (PowerShell example)
+Docker Desktop
 
-$env:ELASTIC_URL="http://127.0.0.1:9200"
-$env:ELASTIC_INDEX="pcap-packets"
-$env:ELASTIC_USER="elastic"
-$env:ELASTIC_PASSWORD="MyStrongPass123!"
-$env:METRICS_PORT="9100"
+2) Start the stack
+
+From the project directory (where docker-compose.yml is located):
+
+docker compose up -d --build
 
 
-Run the Service
+3) Verify Elasticsearch (requires credentials)
 
-py .\pcap_service.py
+http://localhost:9200
 
+curl.exe http://localhost:9100/metrics
 
 Example Document Written to Elasticsearch
 
