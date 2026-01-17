@@ -33,6 +33,13 @@ Create a file named `.env`  and set:
 ```env
 ELASTIC_PASSWORD=YourStrongPasswordHere
 
+`To withdraw TOKEN to Kimba, run the command:`
+
+## docker exec -it es01 /usr/share/elasticsearch/bin/elasticsearch-service-tokens create elastic/kibana kibana-token
+
+ELASTICSEARCH_SERVICEACCOUNTTOKEN=KIBANA_SERVICE_TOKEN
+
+
 How to Run (Recommended: Docker Compose)
 1) Prerequisites
 
@@ -54,4 +61,3 @@ curl.exe http://localhost:9100/metrics
 Example Document Written to Elasticsearch
 
 curl.exe -u elastic:MyStrongPass123! "http://localhost:9200/pcap-packets/_search?size=2&_source=timestamp,src_ip,dst_ip,src_port,dst_port,l4_protocol,packet_length&pretty"
-
