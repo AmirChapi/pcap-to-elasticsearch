@@ -1,63 +1,250 @@
-# PCAP to Elasticsearch + Prometheus Metrics
+# PCAP to Elasticsearch – Kubernetes & Helm Deployment
 
-A small Python service that reads a PCAP/PCAPNG file, extracts basic packet fields, stores each packet as a single document in Elasticsearch, and exposes Prometheus metrics via `/metrics`.
+## 📌 Project Overview
 
----
+This project demonstrates a full migration of a Python-based PCAP processing service
+from **Docker Compose** to a **production-grade Kubernetes architecture**, fully managed using **Helm**.
 
-## Project Structure
-
-- `pcap_service.py` - main service (reads PCAP, writes to Elasticsearch, exposes metrics)
-- `docker-compose.yml` - runs Elasticsearch + the service
-- `Dockerfile` - builds the Python service image
-- `requirements.txt` - Python dependencies
-- `data/caputure.pcapng` - example PCAPNG file (optional)
+The system ingests network traffic data from PCAP/PCAPNG files, processes it using Python + Scapy,
+exposes Prometheus metrics, and stores structured packet data in Elasticsearch,
+with Kibana used for visualization and exploration.
 
 ---
 
-## Example PCAP File
+## 🧱 Architecture Components
 
-You can download sample PCAP/PCAPNG files from:
-- https://apackets.com/pcaps
+The solution consists of the following components deployed on Kubernetes:
 
-Place a file here (default path used by the service):
-- `data/caputure.pcapng`
+* **PCAP Service (Python)**
+
+  * Reads PCAP files
+  * Extracts packet metadata
+  * Pushes documents into Elasticsearch
+  * Exposes Prometheus metrics on port `9100`
+
+* **Elasticsearch**
+
+  * Acts as both search engine and primary data store
+  * Deployed as a `StatefulSet` to preserve identity and storage
+  * Secured with TLS
+
+* **Kibana**
+
+  * Visualization layer for Elasticsearch data
+  * Exposed externally via Ingress
+  * Uses service account authentication
+
+* **Ingress NGINX**
+
+  * Entry point into the cluster
+  * Handles HTTPS and TLS termination
+  * Routes traffic based on hostname
+
+* **Helm**
+
+  * Used to package, template, and manage the entire Kubernetes deployment
 
 ---
 
-## Docker Compose `.env` (recommended)
+## 🚀 Why Helm?
 
-Docker Compose automatically loads a `.env` file from the same directory as `docker-compose.yml`.
+Instead of managing raw Kubernetes YAML files, this project uses **Helm** to:
 
-Create a file named `.env`  and set:
+* Parameterize configuration via `values.yaml`
+* Avoid duplication across manifests
+* Support multiple environments (dev / staging / prod)
+* Enable versioned, repeatable deployments
+* Make upgrades and rollbacks safe and simple
 
-```env
-ELASTIC_PASSWORD=YourStrongPasswordHere
+In short: **Helm turns Kubernetes from static YAML into a manageable system.**
 
-`To withdraw TOKEN to Kimba, run the command:`
+---
 
-## docker exec -it es01 /usr/share/elasticsearch/bin/elasticsearch-service-tokens create elastic/kibana kibana-token
+## 📁 Helm Chart Structure
 
-ELASTICSEARCH_SERVICEACCOUNTTOKEN=KIBANA_SERVICE_TOKEN
+```text
+helm/
+├── Chart.yaml
+├── values.yaml
+└── templates/
+    ├── pcap-service.yaml
+    ├── elasticsearch.yaml
+    ├── kibana.yaml
+    ├── ingress.yaml
+    ├── configmap.yaml
+    └── secrets.yaml
+```
 
+### Chart.yaml
 
-How to Run (Recommended: Docker Compose)
-1) Prerequisites
+Defines chart metadata such as name, version, and description.
 
-Docker Desktop
+### values.yaml
 
-2) Start the stack
+Central configuration file containing:
 
-From the project directory (where docker-compose.yml is located):
+* Image names & tags
+* Resource limits
+* Elasticsearch credentials
+* TLS paths
+* Ingress hostnames
 
-docker compose up -d --build
+### templates/
 
+Contains Kubernetes manifests rendered dynamically using Helm templating.
 
-3) Verify Elasticsearch (requires credentials)
+---
 
-http://localhost:9200
+## 🔐 Security Design
 
-curl.exe http://localhost:9100/metrics
+### Secrets
 
-Example Document Written to Elasticsearch
+Sensitive data (credentials, tokens, certificates) are stored as Kubernetes **Secrets**, not in Git.
 
-curl.exe -u elastic:MyStrongPass123! "http://localhost:9200/pcap-packets/_search?size=2&_source=timestamp,src_ip,dst_ip,src_port,dst_port,l4_protocol,packet_length&pretty"
+* Elasticsearch credentials
+* Service account tokens
+* TLS private keys
+
+Secrets are injected into pods via:
+
+* Environment variables
+* Mounted files
+
+> Secrets are Base64-encoded and stored securely in etcd with RBAC protection.
+
+---
+
+### TLS & Certificates
+
+The system uses **TLS in two layers**:
+
+#### 1️⃣ External TLS (User → Ingress → Kibana)
+
+* Browser encrypts traffic using Kibana’s public certificate
+* Ingress terminates TLS (TLS termination)
+* Traffic is routed to Kibana service
+
+#### 2️⃣ Internal TLS (PCAP Service → Elasticsearch)
+
+* Python service connects to Elasticsearch over HTTPS
+* CA certificate is mounted into the container
+* Elasticsearch verifies client trust
+
+This ensures:
+
+* Encrypted traffic over public and internal networks
+* Protection against sniffing and MITM attacks
+
+---
+
+## 🌐 Networking & Service Discovery
+
+### Kubernetes Service
+
+Each application is exposed internally via a **Service**:
+
+* Provides a stable virtual IP
+* Load balances traffic across pods
+* Enables internal DNS resolution
+
+Example:
+
+```text
+elasticsearch.pcap.svc.cluster.local
+kibana.pcap.svc.cluster.local
+```
+
+Pods never talk to IPs directly — only to Services.
+
+---
+
+### Ingress
+
+Ingress acts as the **HTTP(S) gateway**:
+
+* Routes traffic by hostname (`kibana.local`)
+* Handles TLS certificates
+* Connects external users to internal services
+
+---
+
+## 📦 Stateful vs Stateless Workloads
+
+### Elasticsearch – StatefulSet
+
+Elasticsearch is deployed as a **StatefulSet** because:
+
+* Data persistence is critical
+* Pod identity must be stable
+* Storage must survive restarts
+
+### PCAP Service – Deployment
+
+PCAP service is stateless:
+
+* No persistent storage required
+* Easy horizontal scaling
+* Supports rolling updates
+
+---
+
+## 📊 Observability
+
+* Prometheus metrics exposed on `/metrics`
+* Packet counts and byte volume by protocol
+* Elasticsearch write success/failure counters
+* Logs streamed directly via Kubernetes logging
+
+---
+
+## 🔁 From Docker Compose to Kubernetes
+
+### What Docker Compose Provided
+
+* Local orchestration
+* Single-host deployment
+* Limited scaling and resilience
+
+### What Kubernetes + Helm Added
+
+* Self-healing pods
+* Declarative desired state
+* Horizontal scalability
+* Secure secrets management
+* TLS and ingress routing
+* Environment abstraction via Helm
+* Production readiness
+
+---
+
+## 🧠 Key Takeaways
+
+* Kubernetes manages **desired state**, not individual containers
+* Services decouple pods from networking concerns
+* Ingress centralizes traffic and security
+* Helm makes Kubernetes maintainable at scale
+* Stateful workloads require different primitives than stateless ones
+* Security must be designed at both network and application levels
+
+---
+
+## ✅ Deployment (Example)
+
+```bash
+helm upgrade --install pcap-stack ./helm \
+  --namespace pcap \
+  --create-namespace
+```
+
+---
+
+## 📌 Future Improvements
+
+* Add Horizontal Pod Autoscaler (HPA)
+* Integrate Prometheus & Grafana
+* Add CI/CD pipeline with Argo CD
+* Separate environments with Helm values
+* Use external secret managers (Vault / SOPS)
+
+---
+
