@@ -1,19 +1,22 @@
 import time
 import argparse
 import os
+from pathlib import Path
+from datetime import datetime, timezone
 
 from prometheus_client import Counter, start_http_server
 from elasticsearch import Elasticsearch
 from scapy.layers.inet import IP, TCP, UDP, ICMP
 from scapy.layers.inet6 import IPv6
 from scapy.utils import PcapNgReader
-from pathlib import Path
-
-
 
 
 DEFAULT_PCAP = Path(__file__).parent / "data" / "caputure.pcapng"
 
+
+# ----------------------------
+# Args
+# ----------------------------
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--pcap",
@@ -29,10 +32,13 @@ if not os.path.exists(pcap_path):
     print("ERROR: PCAP file not found:", pcap_path)
     raise SystemExit(1)
 
+
+# ----------------------------
+# Prometheus metrics
+# ----------------------------
 METRICS_PORT = int(os.environ.get("METRICS_PORT", "9100"))
 start_http_server(METRICS_PORT)
 print("Metrics server running on port", METRICS_PORT, "-> /metrics")
-
 
 packets_counter = Counter(
     "pcap_packets_total",
@@ -52,26 +58,38 @@ elastic_write_counter = Counter(
     ["status"]
 )
 
-ELASTIC_URL = os.environ.get("ELASTIC_URL", "http://127.0.0.1:9200")
+
+# ----------------------------
+# Elasticsearch config
+# ----------------------------
+ELASTIC_URL = os.environ.get("ELASTIC_URL", "https://elasticsearch:9200")
 ELASTIC_INDEX = os.environ.get("ELASTIC_INDEX", "pcap-packets")
 
-ELASTIC_USER = os.environ.get("ELASTIC_USER")        
-ELASTIC_PASSWORD = os.environ.get("ELASTIC_PASSWORD")  
+ELASTIC_USER = os.environ.get("ELASTIC_USER")
+ELASTIC_PASSWORD = os.environ.get("ELASTIC_PASSWORD")
+
+# Path to CA certificate for TLS verification (e.g. /certs/ca.crt)
+ELASTIC_CA_CERT = os.environ.get("ELASTIC_CA_CERT")
 
 ELASTIC_RETRIES = int(os.environ.get("ELASTIC_RETRIES", "3"))
 ELASTIC_RETRY_SLEEP = float(os.environ.get("ELASTIC_RETRY_SLEEP", "0.2"))
 
-if ELASTIC_USER and ELASTIC_PASSWORD:
-    es = Elasticsearch(
-        ELASTIC_URL,
-        basic_auth=(ELASTIC_USER, ELASTIC_PASSWORD),
-        request_timeout=10
-    )
-else:
-    es = Elasticsearch(
-        ELASTIC_URL,
-        request_timeout=10
-    )
+
+def create_es_client() -> Elasticsearch:
+    es_kwargs = {"request_timeout": 10}
+
+    # TLS verify using CA if provided
+    if ELASTIC_CA_CERT:
+        es_kwargs["ca_certs"] = ELASTIC_CA_CERT
+
+    # Basic auth if provided
+    if ELASTIC_USER and ELASTIC_PASSWORD:
+        es_kwargs["basic_auth"] = (ELASTIC_USER, ELASTIC_PASSWORD)
+
+    return Elasticsearch(ELASTIC_URL, **es_kwargs)
+
+
+es = create_es_client()
 
 try:
     info = es.info()
@@ -80,9 +98,16 @@ except Exception as e:
     print("ERROR: Could not connect to Elasticsearch:", e)
     raise SystemExit(1)
 
-def extract_fields(pkt):
+
+# ----------------------------
+# Packet parsing
+# ----------------------------
+def extract_fields(pkt) -> dict:
+    pkt_time = float(getattr(pkt, "time", 0.0))
+
     data = {
-        "timestamp": float(getattr(pkt, "time", 0.0)),
+        "@timestamp": datetime.fromtimestamp(pkt_time, tz=timezone.utc).isoformat(),
+        "timestamp": pkt_time,  # epoch seconds (float)
         "packet_length": len(pkt),
         "src_ip": None,
         "dst_ip": None,
@@ -123,7 +148,10 @@ def extract_fields(pkt):
 
     return data
 
-# ---- Read PCAP + metrics + write to Elasticsearch ----
+
+# ----------------------------
+# Read PCAP + metrics + write to Elasticsearch
+# ----------------------------
 packets_total = {"tcp": 0, "udp": 0, "icmp": 0, "other": 0}
 bytes_total = {"tcp": 0, "udp": 0, "icmp": 0, "other": 0}
 
@@ -149,13 +177,10 @@ with PcapNgReader(pcap_path) as reader:
             print(f"\nPacket #{count}")
             print(data)
 
-        written = False
-
         for attempt in range(1, ELASTIC_RETRIES + 1):
             try:
                 es.index(index=ELASTIC_INDEX, document=data)
                 elastic_write_counter.labels(status="success").inc(1)
-                written = True
                 break
             except Exception as e:
                 if attempt < ELASTIC_RETRIES:
@@ -171,20 +196,8 @@ with PcapNgReader(pcap_path) as reader:
                         )
                         fail_prints += 1
 
-print("\nTotal packets read:", count)
-print("\nPackets total by protocol:", packets_total)
-print("Bytes total by protocol:", bytes_total)
-print("\nFinished reading PCAP and writing to Elasticsearch.")
-
-print("\nOpen: http://localhost:%d/metrics" % METRICS_PORT)
-print("Service is running. Press Ctrl+C to stop.")
-
 try:
     while True:
         time.sleep(5)
 except KeyboardInterrupt:
     print("\nStopping service... bye!")
-
-
-
-

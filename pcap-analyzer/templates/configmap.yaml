@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pcap-config
+  namespace: {{ .Values.namespace }}
+data:
+  ELASTIC_URL: "https://elasticsearch:9200"
+  ELASTIC_INDEX: "pcap-packets"
+  ELASTIC_CA_CERT: "/certs/ca.crt"
+  METRICS_PORT: {{ .Values.pcapService.metricsPort | quote }}

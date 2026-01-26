@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pcap-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.pcapService.replicas }}
+  selector:
+    matchLabels:
+      app: pcap-service
+  template:
+    metadata:
+      labels:
+        app: pcap-service
+    spec:
+      containers:
+        - name: pcap
+          image: {{ .Values.pcapService.image }}
+          imagePullPolicy: IfNotPresent
+
+          envFrom:
+            - configMapRef:
+                name: pcap-config
+            - secretRef:
+                name: pcap-secret
+
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.pcapService.metricsPort }}
+
+          volumeMounts:
+            - name: es-ca
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: es-ca
+          secret:
+            secretName: es-certs
+            items:
+              - key: ca.crt
+                path: ca.crt

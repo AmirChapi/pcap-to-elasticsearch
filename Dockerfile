@@ -15,4 +15,5 @@ COPY . /app
 
 EXPOSE 9100
 
-CMD ["python", "pcap_service.py"]
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "-u", "pcap_service.py"]
