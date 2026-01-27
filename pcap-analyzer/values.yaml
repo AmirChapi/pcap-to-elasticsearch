@@ -16,7 +16,7 @@ elasticsearch:
 
 kibana:
   image: docker.elastic.co/kibana/kibana:8.11.3
-  serviceAccountToken: "AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbi12MjpJenZkdi1LdFJ1dUVOdDd1OVc5YzRR"
+  serviceAccountToken: "AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS1yZXNldC10b2tlbjp4dTZna3F1R1NFdVRzNXNCTVdzOHF3"
 
 
 pcapService:
