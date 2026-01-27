@@ -21,18 +21,24 @@ The solution consists of the following components deployed on Kubernetes:
   * Extracts packet metadata
   * Pushes documents into Elasticsearch
   * Exposes Prometheus metrics on port `9100`
+  kubectl port-forward pcap-service-XXXXXX 9100:9100 -n pcap
 
 * **Elasticsearch**
 
   * Acts as both search engine and primary data store
   * Deployed as a `StatefulSet` to preserve identity and storage
   * Secured with TLS
+  kubectl port-forward elasticsearch-0 9200:9200 -n pcap
 
 * **Kibana**
 
   * Visualization layer for Elasticsearch data
   * Exposed externally via Ingress
   * Uses service account authentication
+  kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8443:443
+  URL = https://kibana.local:8443/
+
+  TOKEN FOR KIBANA = kubectl exec -it -n pcap elasticsearch-0 -- bin/elasticsearch-service-tokens create elastic/kibana kibana-token-v
 
 * **Ingress NGINX**
 
